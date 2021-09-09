@@ -1,0 +1,2 @@
+pattern: "(^Server closed$)|.*restart.*" # regex
+wait: 60 # seconds
