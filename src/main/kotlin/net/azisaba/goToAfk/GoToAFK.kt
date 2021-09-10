@@ -6,6 +6,8 @@ import net.azisaba.goToAfk.util.ServerInfoResolvable
 import net.md_5.bungee.api.ProxyServer
 import net.md_5.bungee.api.plugin.Plugin
 import java.util.UUID
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 class GoToAFK: Plugin() {
@@ -14,6 +16,11 @@ class GoToAFK: Plugin() {
         val plsCheck = mutableListOf<UUID>()
         val onlineServers = mutableSetOf<String>()
         lateinit var instance: GoToAFK
+    }
+
+    private var number = 0L
+    private val executor: ExecutorService = Executors.newCachedThreadPool {
+        Thread(it).apply { name = "GTA Server Pinger #${++number}" }.apply { isDaemon = true }
     }
 
     init {
@@ -27,12 +34,14 @@ class GoToAFK: Plugin() {
         proxy.pluginManager.registerCommand(this, GTACommand)
         proxy.scheduler.schedule(this, {
             proxy.servers.forEach { (name, info) ->
-                info.ping { ping, throwable ->
-                    if (ping == null || throwable != null) {
-                        onlineServers.remove(name)
-                        return@ping
+                executor.execute {
+                    info.ping { ping, throwable ->
+                        if (ping == null || throwable != null) {
+                            onlineServers.remove(name)
+                            return@ping
+                        }
+                        onlineServers.add(name)
                     }
-                    onlineServers.add(name)
                 }
             }
         }, 10L, 10L, TimeUnit.SECONDS)
