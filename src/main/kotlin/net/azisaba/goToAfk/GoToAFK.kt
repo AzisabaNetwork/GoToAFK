@@ -1,10 +1,14 @@
 package net.azisaba.goToAfk
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder
+import io.netty.channel.EventLoopGroup
 import net.azisaba.goToAfk.listener.ClearOnQuitOrServerChangeListener
 import net.azisaba.goToAfk.listener.RegisterOnKickListener
 import net.azisaba.goToAfk.util.ServerInfoResolvable
+import net.azisaba.goToAfk.util.Util.doPing
 import net.md_5.bungee.api.ProxyServer
 import net.md_5.bungee.api.plugin.Plugin
+import net.md_5.bungee.netty.PipelineUtils
 import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -16,6 +20,7 @@ class GoToAFK: Plugin() {
         val plsCheck = mutableListOf<UUID>()
         val onlineServers = mutableSetOf<String>()
         lateinit var instance: GoToAFK
+        lateinit var eventLoopGroup: EventLoopGroup
     }
 
     private var number = 0L
@@ -29,22 +34,27 @@ class GoToAFK: Plugin() {
     }
 
     override fun onEnable() {
+        eventLoopGroup = PipelineUtils.newEventLoopGroup(
+            0,
+            ThreadFactoryBuilder().setNameFormat("GTA Server Pinger IO Thread #%1\$d").build(),
+        )
         proxy.pluginManager.registerListener(this, RegisterOnKickListener)
         proxy.pluginManager.registerListener(this, ClearOnQuitOrServerChangeListener)
         proxy.pluginManager.registerCommand(this, GTACommand)
         proxy.scheduler.schedule(this, {
+            @Suppress("DEPRECATION") // not deprecated in bungeecord
             proxy.servers.forEach { (name, info) ->
                 executor.execute {
-                    info.ping { ping, throwable ->
+                    info.doPing { ping, throwable ->
                         if (ping == null || throwable != null) {
                             onlineServers.remove(name)
-                            return@ping
+                            return@doPing
                         }
                         onlineServers.add(name)
                     }
                 }
             }
-        }, 10L, 10L, TimeUnit.SECONDS)
+        }, 2L, 10L, TimeUnit.SECONDS)
         proxy.scheduler.schedule(this, {
             val toRemove = mutableListOf<UUID>()
             plsCheck.forEach { uuid ->
@@ -64,5 +74,12 @@ class GoToAFK: Plugin() {
             }
             plsCheck.removeAll(toRemove)
         }, 5L, 5L, TimeUnit.SECONDS)
+    }
+
+    override fun onDisable() {
+        logger.info("Closing IO threads")
+        eventLoopGroup.shutdownGracefully()
+        eventLoopGroup.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS)
+        logger.info("Goodbye!")
     }
 }

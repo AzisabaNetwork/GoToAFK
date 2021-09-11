@@ -45,7 +45,7 @@ object ReloadableGTAConfig {
     }
 
     @Language("RegExp")
-    private val defaultRegex = "(^Server closed\$)|.*restart.*"
+    private val defaultRegex = ".*(Server closed|restart).*"
     val pattern get() = cfg.getString("pattern", defaultRegex).toRegexOr(defaultRegex.toRegex())
     val wait get() = max(0, cfg.getInt("wait", 60))
 }

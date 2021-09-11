@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "net.azisaba"
-version = "1.0.1"
+version = "1.0.2"
 
 repositories {
     mavenLocal()
@@ -16,7 +16,8 @@ repositories {
 dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib:1.5.30")
     implementation("xyz.acrylicstyle:java-util-kotlin:0.15.4")
-    compileOnly("net.md-5:bungeecord-api:1.17-R0.1-SNAPSHOT")
+    compileOnly("io.github.waterfallmc:waterfall-proxy:1.17-R0.1-SNAPSHOT")
+    compileOnly("io.netty:netty-all:4.1.67.Final")
 }
 
 tasks {
