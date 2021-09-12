@@ -16,12 +16,14 @@ object RegisterOnKickListener: Listener {
     @EventHandler
     fun onServerKick(e: ServerKickEvent) {
         if (!ChatColor.stripColor(BaseComponent.toLegacyText(*e.kickReasonComponent)).matches(ReloadableGTAConfig.pattern)) return
-        GoToAFK.serversMap[e.player.uniqueId] = e.kickedFrom.toResolvable()
-        ProxyServer.getInstance().scheduler.schedule(GoToAFK.instance, {
-            if (GoToAFK.serversMap.containsKey(e.player.uniqueId)) {
-                GoToAFK.plsCheck.add(e.player.uniqueId)
-            }
-        }, ReloadableGTAConfig.wait.toLong(), TimeUnit.SECONDS)
+        if (!e.kickedFrom.name.lowercase().startsWith("afk")) {
+            GoToAFK.serversMap[e.player.uniqueId] = e.kickedFrom.toResolvable()
+            ProxyServer.getInstance().scheduler.schedule(GoToAFK.instance, {
+                if (GoToAFK.serversMap.containsKey(e.player.uniqueId)) {
+                    GoToAFK.plsCheck.add(e.player.uniqueId)
+                }
+            }, ReloadableGTAConfig.wait.toLong(), TimeUnit.SECONDS)
+        }
         e.cancelServer = GoToAFK.onlineServers
             .filter { it != e.kickedFrom.name && it.startsWith("afk") }
             .randomOrNull()

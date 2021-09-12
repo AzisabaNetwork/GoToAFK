@@ -10,6 +10,7 @@ import util.yaml.YamlConfiguration
 import util.yaml.YamlObject
 import java.io.File
 import kotlin.math.max
+import kotlin.math.min
 
 object ReloadableGTAConfig {
     private lateinit var cfg: YamlObject
@@ -39,13 +40,19 @@ object ReloadableGTAConfig {
             GoToAFK.instance.logger.warning("Invalid wait time: ${cfg.getInt("wait", 60)}")
             sender?.sendMessage(*TextComponent.fromLegacyText("Invalid wait time: ${cfg.getInt("wait", 60)}"))
         }
+        if (cfg.getInt("checkEvery") < 0) {
+            GoToAFK.instance.logger.warning("Invalid checkEvery time: ${cfg.getInt("checkEvery", 10)}")
+            sender?.sendMessage(*TextComponent.fromLegacyText("Invalid checkEvery time: ${cfg.getInt("checkEvery", 10)}"))
+        }
         println("Reloaded config.yml:")
         println("  pattern: $pattern")
         println("  wait: $wait")
+        println("  checkEvery: $checkEvery")
     }
 
     @Language("RegExp")
     private val defaultRegex = ".*(Server closed|restart).*"
     val pattern get() = cfg.getString("pattern", defaultRegex).toRegexOr(defaultRegex.toRegex())
-    val wait get() = max(0, cfg.getInt("wait", 60))
+    val wait get() = max(0, cfg.getInt("wait", 80))
+    val checkEvery get() = min(300, max(0, cfg.getInt("checkEvery", 10)))
 }
