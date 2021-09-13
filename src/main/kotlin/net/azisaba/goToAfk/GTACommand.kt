@@ -22,14 +22,14 @@ object GTACommand: Command("gta", "gotoafk.command.gta", "gotoafk"), TabExecutor
                     ?: return sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.RED}サーバーが見つかりません"))
                 GoToAFK.serversMap[player.uniqueId] = server.toResolvable()
                 GoToAFK.plsCheck.add(player.uniqueId)
-                player.sendMessage(*TextComponent.fromLegacyText("${ChatColor.GREEN}:done:"))
+                sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.GREEN}:done:"))
             } else if (args[1] == "remove") {
                 if (args.size <= 3) return sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.RED}/gta debug remove <player>"))
                 val player = ProxyServer.getInstance().getPlayer(args[2])
                     ?: return sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.RED}プレイヤーが見つかりません"))
                 GoToAFK.serversMap.remove(player.uniqueId)
                 GoToAFK.plsCheck.remove(player.uniqueId)
-                player.sendMessage(*TextComponent.fromLegacyText("${ChatColor.GREEN}:done:"))
+                sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.GREEN}:done:"))
             }
         } else if (args[0] == "reload") {
             ReloadableGTAConfig.reload(sender)
