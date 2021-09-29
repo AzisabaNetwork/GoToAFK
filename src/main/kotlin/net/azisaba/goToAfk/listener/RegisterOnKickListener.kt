@@ -4,6 +4,7 @@ import net.azisaba.goToAfk.GoToAFK
 import net.azisaba.goToAfk.ReloadableGTAConfig
 import net.azisaba.goToAfk.util.ServerInfoResolvable.Companion.toResolvable
 import net.md_5.bungee.api.ChatColor
+import net.md_5.bungee.api.ChatMessageType
 import net.md_5.bungee.api.ProxyServer
 import net.md_5.bungee.api.chat.BaseComponent
 import net.md_5.bungee.api.chat.TextComponent
@@ -34,6 +35,11 @@ object RegisterOnKickListener: Listener {
             if (e.player.isConnected) {
                 e.player.sendMessage(*TextComponent.fromLegacyText("${ChatColor.GOLD}サーバーからキックされました:"))
                 e.player.sendMessage(*e.kickReasonComponent)
+                val title = ProxyServer.getInstance().createTitle()
+                title.title(*TextComponent.fromLegacyText("${ChatColor.GOLD}サーバー再起動中です"))
+                title.subTitle(*TextComponent.fromLegacyText("再起動が完了すると自動的にサーバーに接続されます。"))
+                e.player.sendTitle(title)
+                e.player.sendMessage(ChatMessageType.ACTION_BAR, *TextComponent.fromLegacyText("${ChatColor.GOLD}サーバーを手動で切り替えた場合はキャンセルされます。"))
             }
         }, 1, TimeUnit.SECONDS)
     }
