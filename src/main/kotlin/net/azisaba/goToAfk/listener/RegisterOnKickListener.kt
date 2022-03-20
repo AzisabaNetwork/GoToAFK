@@ -1,46 +1,53 @@
 package net.azisaba.goToAfk.listener
 
+import com.velocitypowered.api.event.Subscribe
+import com.velocitypowered.api.event.player.KickedFromServerEvent
+import com.velocitypowered.api.event.player.KickedFromServerEvent.RedirectPlayer
 import net.azisaba.goToAfk.GoToAFK
 import net.azisaba.goToAfk.ReloadableGTAConfig
 import net.azisaba.goToAfk.util.ServerInfoResolvable.Companion.toResolvable
-import net.md_5.bungee.api.ChatColor
-import net.md_5.bungee.api.ChatMessageType
-import net.md_5.bungee.api.ProxyServer
-import net.md_5.bungee.api.chat.BaseComponent
-import net.md_5.bungee.api.chat.TextComponent
-import net.md_5.bungee.api.event.ServerKickEvent
-import net.md_5.bungee.api.plugin.Listener
-import net.md_5.bungee.event.EventHandler
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
+import net.kyori.adventure.title.Title
 import java.util.concurrent.TimeUnit
 
-object RegisterOnKickListener: Listener {
-    @EventHandler
-    fun onServerKick(e: ServerKickEvent) {
-        if (!ChatColor.stripColor(BaseComponent.toLegacyText(*e.kickReasonComponent)).matches(ReloadableGTAConfig.pattern)) return
-        if (!e.kickedFrom.name.lowercase().startsWith("afk")) {
-            GoToAFK.serversMap[e.player.uniqueId] = e.kickedFrom.toResolvable()
-            ProxyServer.getInstance().scheduler.schedule(GoToAFK.instance, {
+object RegisterOnKickListener {
+    @Subscribe
+    fun onServerKick(e: KickedFromServerEvent) {
+        if (e.kickedDuringServerConnect()) return
+        if (!e.serverKickReason.isPresent) return
+        val reasonWithoutColor = LegacyComponentSerializer.legacySection()
+            .serialize(e.serverKickReason.get())
+            .replace("(?i)\\u00a7[0-9a-filmnox]".toRegex(), "")
+        if (!reasonWithoutColor.matches(ReloadableGTAConfig.pattern)) return
+        if (!e.server.serverInfo.name.lowercase().startsWith("afk")) {
+            GoToAFK.serversMap[e.player.uniqueId] = e.server.toResolvable()
+            GoToAFK.instance.server.scheduler.buildTask(GoToAFK.instance) {
                 if (GoToAFK.serversMap.containsKey(e.player.uniqueId)) {
                     GoToAFK.plsCheck.add(e.player.uniqueId)
                 }
-            }, ReloadableGTAConfig.wait.toLong(), TimeUnit.SECONDS)
+            }.delay(ReloadableGTAConfig.wait.toLong(), TimeUnit.SECONDS).schedule()
         }
-        e.cancelServer = GoToAFK.onlineServers
-            .filter { it != e.kickedFrom.name && it.startsWith("afk") }
-            .randomOrNull()
-            ?.let { ProxyServer.getInstance().getServerInfo(it) }
-            ?: return
-        e.isCancelled = true
-        ProxyServer.getInstance().scheduler.schedule(GoToAFK.instance, {
-            if (e.player.isConnected) {
-                e.player.sendMessage(*TextComponent.fromLegacyText("${ChatColor.GOLD}サーバーからキックされました:"))
-                e.player.sendMessage(*e.kickReasonComponent)
-                val title = ProxyServer.getInstance().createTitle()
-                title.title(*TextComponent.fromLegacyText("${ChatColor.GOLD}サーバー再起動中です"))
-                title.subTitle(*TextComponent.fromLegacyText("再起動が完了すると自動的にサーバーに接続されます。"))
-                e.player.sendTitle(title)
-                e.player.sendMessage(ChatMessageType.ACTION_BAR, *TextComponent.fromLegacyText("${ChatColor.GOLD}サーバーを手動で切り替えた場合はキャンセルされます。"))
+        e.result = RedirectPlayer.create(
+            GoToAFK.onlineServers
+                .filter { it != e.server.serverInfo.name && it.startsWith("afk") }
+                .randomOrNull()
+                ?.let { GoToAFK.instance.server.getServer(it).orElse(null) }
+                ?: return
+        )
+        GoToAFK.instance.server.scheduler.buildTask(GoToAFK.instance) {
+            if (e.player.isActive) {
+                e.player.sendMessage(Component.text("サーバーからキックされました:", NamedTextColor.GOLD))
+                e.player.sendMessage(e.serverKickReason.get())
+                e.player.showTitle(
+                    Title.title(
+                        Component.text("サーバー再起動中です", NamedTextColor.GOLD),
+                        Component.text("再起動が完了すると自動的にサーバーに接続されます。"),
+                    )
+                )
+                e.player.sendActionBar(Component.text("サーバーを手動で切り替えた場合はキャンセルされます。", NamedTextColor.GOLD))
             }
-        }, 1, TimeUnit.SECONDS)
+        }.delay(1, TimeUnit.SECONDS).schedule()
     }
 }

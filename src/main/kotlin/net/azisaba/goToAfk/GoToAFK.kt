@@ -1,30 +1,26 @@
 package net.azisaba.goToAfk
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder
-import io.netty.channel.EventLoopGroup
+import com.google.inject.Inject
+import com.velocitypowered.api.event.Subscribe
+import com.velocitypowered.api.event.proxy.ProxyInitializeEvent
+import com.velocitypowered.api.proxy.ProxyServer
+import com.velocitypowered.api.scheduler.ScheduledTask
 import net.azisaba.goToAfk.listener.ClearOnQuitOrServerChangeListener
 import net.azisaba.goToAfk.listener.RegisterOnKickListener
 import net.azisaba.goToAfk.util.ServerInfoResolvable
-import net.azisaba.goToAfk.util.Util.doPing
-import net.md_5.bungee.api.ProxyServer
-import net.md_5.bungee.api.plugin.Plugin
-import net.md_5.bungee.api.scheduler.ScheduledTask
-import net.md_5.bungee.netty.PipelineUtils
+import org.slf4j.Logger
 import java.util.UUID
-import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
-import kotlin.math.max
 
-class GoToAFK: Plugin() {
+class GoToAFK @Inject constructor(val server: ProxyServer, val logger: Logger) {
     companion object {
         val serversMap = mutableMapOf<UUID, ServerInfoResolvable>()
         val plsCheck = mutableListOf<UUID>()
         val onlineServers = mutableSetOf<String>()
         val ignoreList = mutableListOf<String>()
         lateinit var instance: GoToAFK
-        lateinit var eventLoopGroup: EventLoopGroup
         private var pingerTask: ScheduledTask? = null
     }
 
@@ -38,20 +34,17 @@ class GoToAFK: Plugin() {
         ReloadableGTAConfig.reload()
     }
 
-    override fun onEnable() {
-        eventLoopGroup = PipelineUtils.newEventLoopGroup(
-            0,
-            ThreadFactoryBuilder().setNameFormat("GTA Server Pinger IO Thread #%1\$d").build(),
-        )
-        proxy.pluginManager.registerListener(this, RegisterOnKickListener)
-        proxy.pluginManager.registerListener(this, ClearOnQuitOrServerChangeListener)
-        proxy.pluginManager.registerCommand(this, GTACommand)
+    @Subscribe
+    fun onProxyInitialization(e: ProxyInitializeEvent) {
+        server.commandManager.register("gta", GTACommand(this), "gotoafk")
+        server.eventManager.register(this, RegisterOnKickListener)
+        server.eventManager.register(this, ClearOnQuitOrServerChangeListener)
         startPingerThread()
-        proxy.scheduler.schedule(this, {
+        server.scheduler.buildTask(this) {
             val toRemove = mutableListOf<UUID>()
             plsCheck.forEach { uuid ->
-                val player = ProxyServer.getInstance().getPlayer(uuid)
-                if (player == null) {
+                val player = server.getPlayer(uuid)
+                if (!player.isPresent) {
                     toRemove.add(uuid)
                     return@forEach
                 }
@@ -61,38 +54,31 @@ class GoToAFK: Plugin() {
                     return@forEach
                 }
                 if (onlineServers.contains(name)) {
-                    player.connect(ProxyServer.getInstance().getServerInfo(name))
+                    player.get().createConnectionRequest(server.getServer(name).get()).fireAndForget()
                 }
             }
             plsCheck.removeAll(toRemove)
-        }, 5L, 5L, TimeUnit.SECONDS)
-    }
-
-    override fun onDisable() {
-        logger.info("Closing IO threads")
-        eventLoopGroup.shutdownGracefully()
-        eventLoopGroup.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS)
-        logger.info("Goodbye!")
+        }.delay(5L, TimeUnit.SECONDS).repeat(5L, TimeUnit.SECONDS).schedule()
     }
 
     fun startPingerThread() {
         pingerTask?.cancel()
-        pingerTask = proxy.scheduler.schedule(this, {
+        pingerTask = server.scheduler.buildTask(this) {
             var count = 0
             @Suppress("DEPRECATION") // not deprecated in bungeecord
-            proxy.servers.forEach { (name, info) ->
-                if (ignoreList.contains(name.lowercase())) return@forEach
+            server.allServers.forEach { server ->
+                if (ignoreList.contains(server.serverInfo.name.lowercase())) return@forEach
                 executor.schedule({
-                    info.doPing { ping, throwable ->
+                    server.ping().handleAsync { ping, throwable ->
                         if (ping == null || throwable != null) {
-                            onlineServers.remove(name)
-                            return@doPing
+                            onlineServers.remove(server.serverInfo.name)
+                            return@handleAsync
                         }
-                        onlineServers.add(name)
+                        onlineServers.add(server.serverInfo.name)
                     }
                 }, count++ * 10L, TimeUnit.MILLISECONDS)
             }
-        }, 2L, ReloadableGTAConfig.checkEvery.toLong(), TimeUnit.SECONDS)
+        }.repeat(ReloadableGTAConfig.checkEvery.toLong(), TimeUnit.SECONDS).schedule()
         logger.info("Reloaded pinger task")
     }
 }

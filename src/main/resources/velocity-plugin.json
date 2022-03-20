@@ -1,0 +1,9 @@
+{
+  "id": "gotoafk",
+  "name": "GoToAFK",
+  "version": "",
+  "url": "",
+  "authors": [],
+  "dependencies": [],
+  "main": "net.azisaba.goToAfk.GoToAFK"
+}

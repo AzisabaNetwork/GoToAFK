@@ -1,84 +1,86 @@
 package net.azisaba.goToAfk
 
+import com.velocitypowered.api.command.SimpleCommand
+import com.velocitypowered.api.command.SimpleCommand.Invocation
 import net.azisaba.goToAfk.util.ServerInfoResolvable.Companion.toResolvable
-import net.md_5.bungee.api.ChatColor
-import net.md_5.bungee.api.CommandSender
-import net.md_5.bungee.api.ProxyServer
-import net.md_5.bungee.api.chat.TextComponent
-import net.md_5.bungee.api.plugin.Command
-import net.md_5.bungee.api.plugin.TabExecutor
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 
-object GTACommand: Command("gta", "gotoafk.command.gta", "gotoafk"), TabExecutor {
-    override fun execute(sender: CommandSender, args: Array<String>) {
+class GTACommand(private val plugin: GoToAFK): SimpleCommand {
+    override fun execute(invocation: Invocation) {
+        val sender = invocation.source()
+        val args = invocation.arguments()
         if (args.isEmpty()) {
-            return sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.RED}/gta <reload|ignore <server>|debug <add|remove>>"))
+            return sender.sendMessage(Component.text("/gta <reload|ignore <server>|debug <add|remove>>", NamedTextColor.RED))
         }
         if (args[0] == "debug") {
             if (args[1] == "add") {
-                if (args.size <= 3) return sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.RED}/gta debug add <player> <server>"))
-                val player = ProxyServer.getInstance().getPlayer(args[2])
-                    ?: return sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.RED}プレイヤーが見つかりません"))
-                val server = ProxyServer.getInstance().getServerInfo(args[3])
-                    ?: return sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.RED}サーバーが見つかりません"))
+                if (args.size <= 3) return sender.sendMessage(Component.text("/gta debug add <player> <server>", NamedTextColor.RED))
+                val player = plugin.server.getPlayer(args[2]).orElse(null)
+                    ?: return sender.sendMessage(Component.text("プレイヤーが見つかりません", NamedTextColor.RED))
+                val server = plugin.server.getServer(args[3]).orElse(null)
+                    ?: return sender.sendMessage(Component.text("サーバーが見つかりません", NamedTextColor.RED))
                 GoToAFK.serversMap[player.uniqueId] = server.toResolvable()
                 GoToAFK.plsCheck.add(player.uniqueId)
-                sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.GREEN}:done:"))
+                sender.sendMessage(Component.text(":done:", NamedTextColor.GREEN))
             } else if (args[1] == "remove") {
-                if (args.size <= 3) return sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.RED}/gta debug remove <player>"))
-                val player = ProxyServer.getInstance().getPlayer(args[2])
-                    ?: return sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.RED}プレイヤーが見つかりません"))
+                if (args.size <= 3) return sender.sendMessage(Component.text("/gta debug remove <player>", NamedTextColor.RED))
+                val player = plugin.server.getPlayer(args[2]).orElse(null)
+                    ?: return sender.sendMessage(Component.text("プレイヤーが見つかりません", NamedTextColor.RED))
                 GoToAFK.serversMap.remove(player.uniqueId)
                 GoToAFK.plsCheck.remove(player.uniqueId)
-                sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.GREEN}:done:"))
+                sender.sendMessage(Component.text(":done:", NamedTextColor.GREEN))
             }
         } else if (args[0] == "reload") {
             ReloadableGTAConfig.reload(sender)
             GoToAFK.instance.startPingerThread()
-            sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.GREEN}設定を再読み込みしました。"))
+            sender.sendMessage(Component.text("設定を再読み込みしました。", NamedTextColor.GREEN))
         } else if (args[0] == "ignore") {
             if (args.size == 1) {
-                return sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.RED}/gta ignore <server>"))
+                return sender.sendMessage(Component.text("/gta ignore <server>", NamedTextColor.RED))
             }
-            val server = ProxyServer.getInstance().getServerInfo(args[1])
-                ?: return sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.RED}サーバーが見つかりません。"))
+            val server = plugin.server.getServer(args[1]).orElse(null)?.serverInfo
+                ?: return sender.sendMessage(Component.text("サーバーが見つかりません。", NamedTextColor.RED))
             if (GoToAFK.ignoreList.contains(server.name.lowercase())) {
                 GoToAFK.ignoreList.remove(server.name.lowercase())
-                sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.GREEN}サーバー'${server.name}'を除外リストから削除しました。"))
+                sender.sendMessage(Component.text("サーバー'${server.name}'を除外リストから削除しました。", NamedTextColor.GREEN))
             } else {
                 GoToAFK.ignoreList.add(server.name.lowercase())
                 GoToAFK.onlineServers.remove(server.name.lowercase())
-                sender.sendMessage(*TextComponent.fromLegacyText("${ChatColor.GREEN}サーバー'${server.name}'を除外リストに追加しました。"))
+                sender.sendMessage(Component.text("サーバー'${server.name}'を除外リストに追加しました。", NamedTextColor.GREEN))
             }
         }
     }
 
-    override fun onTabComplete(sender: CommandSender, args: Array<String>): Iterable<String> {
+    override fun suggest(invocation: Invocation): List<String> {
+        val args = invocation.arguments()
         if (args.isEmpty()) return emptyList()
         if (args.size == 1) return listOf("debug", "ignore", "reload").filter(args[0])
         if (args.size == 2) {
             if (args[0] == "debug") {
                 return listOf("add", "remove").filter(args[1])
             } else if (args[0] == "ignore") {
-                return ProxyServer.getInstance().players.map { it.name }.filter(args[1])
+                return plugin.server.allPlayers.map { it.username }.filter(args[1])
             }
         }
         if (args.size == 3) {
             if (args[0] == "debug") {
                 if (args[1] == "add" || args[1] == "remove") {
-                    return ProxyServer.getInstance().players.map { it.name }.filter(args[2])
+                    return plugin.server.allPlayers.map { it.username }.filter(args[2])
                 }
             }
         }
         if (args.size == 4) {
             if (args[0] == "debug") {
                 if (args[1] == "add") {
-                    @Suppress("DEPRECATION")
-                    return ProxyServer.getInstance().servers.values.map { it.name }.filter(args[3])
+                    return plugin.server.allServers.map { it.serverInfo.name }.filter(args[3])
                 }
             }
         }
         return emptyList()
     }
+
+    override fun hasPermission(invocation: Invocation): Boolean = invocation.source().hasPermission("gotoafk.command.gta")
 
     private fun List<String>.filter(s: String): List<String> = distinct().filter { s1 -> s1.lowercase().startsWith(s.lowercase()) }
 }

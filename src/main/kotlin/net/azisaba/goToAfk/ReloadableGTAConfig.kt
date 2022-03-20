@@ -1,8 +1,8 @@
 package net.azisaba.goToAfk
 
+import com.velocitypowered.api.command.CommandSource
 import net.azisaba.goToAfk.util.Util.toRegexOr
-import net.md_5.bungee.api.CommandSender
-import net.md_5.bungee.api.chat.TextComponent
+import net.kyori.adventure.text.Component
 import org.intellij.lang.annotations.Language
 import util.ResourceLocator
 import util.base.Bytes
@@ -15,14 +15,14 @@ import kotlin.math.min
 object ReloadableGTAConfig {
     private lateinit var cfg: YamlObject
 
-    fun reload(sender: CommandSender? = null) {
+    fun reload(sender: CommandSource? = null) {
         val dir = File("./plugins/GoToAFK")
         dir.mkdir()
         val file = File(dir, "config.yml")
         if (!file.exists()) {
             val input = ResourceLocator.getInstance(ReloadableGTAConfig::class.java).getResourceAsStream("/config.yml")
             if (input == null) {
-                GoToAFK.instance.logger.severe("Could not find config.yml in jar file!")
+                GoToAFK.instance.logger.error("Could not find config.yml in jar file!")
             } else {
                 Bytes.copy(input, file)
                 GoToAFK.instance.logger.info("Generated default config.yml")
@@ -32,17 +32,17 @@ object ReloadableGTAConfig {
         try {
             cfg.getString("pattern").toRegex()
         } catch (e: Exception) {
-            GoToAFK.instance.logger.warning("Invalid pattern: ${cfg.getString("pattern")}")
-            sender?.sendMessage(*TextComponent.fromLegacyText("Invalid pattern: ${cfg.getString("pattern")}"))
+            GoToAFK.instance.logger.warn("Invalid pattern: ${cfg.getString("pattern")}")
+            sender?.sendMessage(Component.text("Invalid pattern: ${cfg.getString("pattern")}"))
             e.printStackTrace()
         }
         if (cfg.getInt("wait") < 0) {
-            GoToAFK.instance.logger.warning("Invalid wait time: ${cfg.getInt("wait", 60)}")
-            sender?.sendMessage(*TextComponent.fromLegacyText("Invalid wait time: ${cfg.getInt("wait", 60)}"))
+            GoToAFK.instance.logger.warn("Invalid wait time: ${cfg.getInt("wait", 60)}")
+            sender?.sendMessage(Component.text("Invalid wait time: ${cfg.getInt("wait", 60)}"))
         }
         if (cfg.getInt("checkEvery") < 0) {
-            GoToAFK.instance.logger.warning("Invalid checkEvery time: ${cfg.getInt("checkEvery", 10)}")
-            sender?.sendMessage(*TextComponent.fromLegacyText("Invalid checkEvery time: ${cfg.getInt("checkEvery", 10)}"))
+            GoToAFK.instance.logger.warn("Invalid checkEvery time: ${cfg.getInt("checkEvery", 10)}")
+            sender?.sendMessage(Component.text("Invalid checkEvery time: ${cfg.getInt("checkEvery", 10)}"))
         }
         println("Reloaded config.yml:")
         println("  pattern: $pattern")
